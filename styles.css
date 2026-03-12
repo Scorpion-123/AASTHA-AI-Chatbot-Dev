@@ -1,0 +1,742 @@
+/* ===================================
+   CESC CHATBOT - BRAND GUIDELINES
+   Dimensions: 400x600px (Desktop)
+   Logo: 120x48px minimum (scaled to 40px for header)
+   Clear space: 3X around logo
+   Primary color: #E57E16 (CESC Orange)
+   =================================== */
+
+/* General Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+/* ===================================
+   CHAT BUBBLE (Floating Button)
+   =================================== */
+.chat-bubble {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #0066B3; /* Blue */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 102, 179, 0.3);
+  overflow: hidden;
+  z-index: 9999;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
+}
+
+/* Hide chat bubble when chatbot is active */
+.chat-bubble.hidden {
+  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat-bubble:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 102, 179, 0.4);
+  animation: pulseHighlight 2s infinite;
+}
+
+@keyframes pulseHighlight {
+  0% { box-shadow: 0 0 0 0 rgba(0, 102, 179, 0.6); }
+  70% { box-shadow: 0 0 0 12px rgba(0, 102, 179, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 102, 179, 0); }
+}
+
+.chat-bubble img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* ===================================
+   CHATBOT CONTAINER
+   Desktop: 400x600px
+   Mobile: Full screen
+   =================================== */
+.chatbot {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 400px;
+  height: 600px;
+  background: #FFFFFF;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0);
+  transform-origin: bottom right;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 9998;
+}
+
+.chatbot.active {
+  transform: scale(1);
+}
+
+/* ===================================
+   CHAT HEADER - WITH TWO COMPANY LOGOS
+   Height: 60px (10% of 600px)
+   =================================== */
+.chat-header {
+  height: 60px;
+  background: rgba(0, 91, 169, 0.45);
+  color: #333333;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* Company Logo Styling */
+.company-logo {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent; /* Transparent background - no box visible */
+  border-radius: 0; /* No border radius */
+  overflow: visible;
+  flex-shrink: 0;
+  padding: 0; /* Remove padding */
+  border: none; /* No border */
+}
+
+.company-logo img {
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+  /* Remove white background from images */
+  background: transparent;
+}
+
+/* CESC Logo (Left side) */
+.cesc-logo {
+  width: auto;
+  min-width: 70px;
+  max-width: 110px;
+  height: 42px;
+  padding: 0;
+  background: transparent !important;
+}
+
+/* RP-Sanjiv Goenka Logo (Right side) */
+.rp-logo {
+  width: auto;
+  min-width: 60px;
+  max-width: 90px;
+  padding: 0; /* Remove padding */
+  margin-right: 8px;
+  background: transparent !important; /* No background */
+}
+
+/* Header Actions */
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.header-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: 400;
+  color: #333333;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.header-btn:hover {
+  background-color: rgba(0, 102, 179, 0.15);
+}
+
+.header-btn:active {
+  background-color: rgba(0, 102, 179, 0.25);
+}
+
+/* ===================================
+   CHAT BODY (Messages Area)
+   Height: ~460px (77% of 600px)
+   =================================== */
+.chat-body {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #F5F5F5;
+}
+
+/* Custom Scrollbar */
+.chat-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-body::-webkit-scrollbar-thumb {
+  background: #D0D0D0;
+  border-radius: 10px;
+}
+
+.chat-body::-webkit-scrollbar-thumb:hover {
+  background: #B0B0B0;
+}
+
+/* ===================================
+   MESSAGES
+   =================================== */
+.message {
+  display: flex;
+  width: 100%;
+  margin-bottom: 4px;
+  animation: messageSlideIn 0.3s ease;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message.bot {
+  justify-content: flex-start;
+}
+
+.message.user {
+  justify-content: flex-end;
+}
+
+/* Message Bubble */
+.message-content {
+  display: inline-block;
+  max-width: 75%;
+  min-width: 60px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* Bot Message */
+.message.bot .message-content {
+  background: #E8EAF6; /* Light blue-grey */
+  color: #1A1A1A;
+  border-bottom-left-radius: 4px;
+}
+
+/* User Message */
+.message.user .message-content {
+  background: #0066B3; /* Blue */
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+/* ===================================
+   TYPING INDICATOR
+   =================================== */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px !important;
+  min-width: 60px;
+}
+
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #999;
+  animation: typingAnimation 1.4s infinite;
+}
+
+.typing-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingAnimation {
+  0%, 60%, 100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-8px);
+  }
+}
+
+/* ===================================
+   CHAT FOOTER (Input Area)
+   Height: 80px (13% of 600px)
+   =================================== */
+.chat-footer {
+  min-height: 80px;
+  height: auto;
+  padding: 12px 20px;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  background: white;
+  border-top: 1px solid #E0E0E0;
+}
+
+/* Attach Icon */
+.attach-icon {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 8px;
+  color: #666;
+  font-size: 18px;
+  transition: all 0.2s ease;
+}
+
+.attach-icon:hover {
+  background-color: #F0F0F0;
+  color: #0066B3;
+}
+
+.attach-icon:active {
+  transform: scale(0.95);
+}
+
+/* Input Column (wraps file preview + input wrapper) */
+.input-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* File Preview Bar */
+.file-preview-bar {
+  display: flex;
+  align-items: center;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #E3F0FA;
+  border: 1px solid #90CAF9;
+  border-radius: 16px;
+  padding: 4px 10px 4px 8px;
+  font-size: 12px;
+  color: #0066B3;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.file-chip i {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.file-chip #filePreviewName {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  font-weight: 500;
+}
+
+.file-chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #0066B3;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 2px;
+  margin-left: 2px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.file-chip-remove:hover {
+  opacity: 1;
+}
+
+/* Input Wrapper */
+.input-wrapper {
+  display: flex;
+}
+
+.chat-footer input {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 20px;
+  border: 1px solid #E0E0E0;
+  outline: none;
+  font-size: 14px;
+  background: #F9F9F9;
+  transition: all 0.2s ease;
+}
+
+.chat-footer input:focus {
+  border-color: #0066B3;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0, 102, 179, 0.1);
+}
+
+.chat-footer input::placeholder {
+  color: #999;
+}
+
+/* ===================================
+   BUTTONS (Send & Audio)
+   =================================== */
+.send-btn,
+.audio-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  border: none;
+  background-color: #0066B3; /* Blue */
+  color: white;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 102, 179, 0.3);
+}
+
+.send-btn i,
+.audio-btn i {
+  font-size: 16px;
+}
+
+.send-btn:hover,
+.audio-btn:hover {
+  background-color: #004C8A;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 102, 179, 0.4);
+}
+
+.send-btn:active,
+.audio-btn:active {
+  transform: scale(0.95);
+}
+
+.send-btn.active,
+.audio-btn.active {
+  display: flex !important;
+}
+
+.audio-btn.hidden,
+.send-btn.hidden {
+  display: none !important;
+}
+
+/* ===================================
+   RECORDING UI
+   =================================== */
+.recording-ui {
+  flex: 1;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #FFF3E0; /* Light orange for recording state */
+  border-radius: 20px;
+  border: 1px solid #FFB74D;
+  cursor: pointer;
+}
+
+.recording-ui.active {
+  display: flex;
+}
+
+.recording-animation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recording-dot {
+  width: 8px;
+  height: 8px;
+  background: #F44336; /* Red recording dot */
+  border-radius: 50%;
+  animation: recordingPulse 1.5s infinite;
+}
+
+@keyframes recordingPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.recording-timer {
+  font-size: 13px;
+  font-weight: 600;
+  color: #F44336;
+  min-width: 35px;
+}
+
+.recording-waveform {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 30px;
+}
+
+.recording-waveform span {
+  width: 3px;
+  background: #FFB74D;
+  border-radius: 2px;
+  animation: waveform 1.2s ease-in-out infinite;
+}
+
+.recording-waveform span:nth-child(1) { animation-delay: 0s; height: 12px; }
+.recording-waveform span:nth-child(2) { animation-delay: 0.1s; height: 18px; }
+.recording-waveform span:nth-child(3) { animation-delay: 0.2s; height: 24px; }
+.recording-waveform span:nth-child(4) { animation-delay: 0.3s; height: 18px; }
+.recording-waveform span:nth-child(5) { animation-delay: 0.4s; height: 12px; }
+.recording-waveform span:nth-child(6) { animation-delay: 0.5s; height: 18px; }
+.recording-waveform span:nth-child(7) { animation-delay: 0.6s; height: 24px; }
+.recording-waveform span:nth-child(8) { animation-delay: 0.7s; height: 18px; }
+.recording-waveform span:nth-child(9) { animation-delay: 0.8s; height: 12px; }
+.recording-waveform span:nth-child(10) { animation-delay: 0.9s; height: 18px; }
+
+@keyframes waveform {
+  0%, 100% { height: 12px; }
+  50% { height: 28px; }
+}
+
+.cancel-recording {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: #F44336;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.cancel-recording:hover {
+  background: #D32F2F;
+  transform: scale(1.05);
+}
+
+.cancel-recording:active {
+  transform: scale(0.95);
+}
+
+/* ===================================
+   RESPONSIVE DESIGN
+   =================================== */
+
+/* Tablet (768px - 1024px) */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .chatbot {
+    width: 380px;
+    height: 580px;
+  }
+  
+  .cesc-logo,
+  .rp-logo {
+    min-width: 55px;
+    max-width: 80px;
+  }
+}
+
+/* Mobile (Below 768px) - Full Screen */
+@media (max-width: 768px) {
+  .chatbot {
+    width: 100vw;
+    height: 100vh;
+    bottom: 0;
+    right: 0;
+    border-radius: 0;
+    max-height: 100vh;
+  }
+
+  .chat-header {
+    height: 56px;
+    padding: 6px 12px;
+  }
+
+  .company-logo {
+    height: 32px;
+  }
+
+  .cesc-logo {
+    min-width: 50px;
+    max-width: 75px;
+    padding: 0;
+  }
+
+  .rp-logo {
+    min-width: 50px;
+    max-width: 75px;
+    padding: 0;
+    margin-right: 6px;
+  }
+
+  .header-btn {
+    width: 26px;
+    height: 26px;
+    font-size: 16px;
+  }
+
+  .chat-body {
+    padding: 12px;
+  }
+
+  .message-content {
+    max-width: 85%;
+    font-size: 13px;
+  }
+
+  .chat-footer {
+    height: 70px;
+    padding: 12px 16px;
+  }
+
+  .chat-bubble {
+    bottom: 20px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+  }
+}
+
+/* Small Mobile (Below 480px) */
+@media (max-width: 480px) {
+  .chat-header {
+    padding: 6px 10px;
+  }
+
+  .company-logo {
+    height: 28px;
+  }
+
+  .cesc-logo,
+  .rp-logo {
+    min-width: 44px;
+    max-width: 65px;
+    padding: 0;
+  }
+
+  .rp-logo {
+    margin-right: 4px;
+  }
+
+  .header-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+  }
+
+  .message-content {
+    font-size: 13px;
+    padding: 9px 12px;
+  }
+
+  .chat-footer input {
+    font-size: 13px;
+    padding: 9px 14px;
+  }
+}
+
+/* Large Desktop (Above 1440px) */
+@media (min-width: 1440px) {
+  .chatbot {
+    width: 420px;
+    height: 640px;
+  }
+
+  .chat-header {
+    height: 64px;
+    padding: 10px 18px;
+  }
+
+  .company-logo {
+    height: 38px;
+  }
+
+  .cesc-logo,
+  .rp-logo {
+    min-width: 65px;
+    max-width: 100px;
+  }
+
+  .rp-logo {
+    margin-right: 10px;
+  }
+}
