@@ -66,7 +66,19 @@ function addMessage(text, sender) {
 
   const messageContent = document.createElement("div");
   messageContent.classList.add("message-content");
-  messageContent.textContent = text;
+  
+  // Convert markdown formatting to HTML
+  let formattedText = text
+    .replace(/\\n/g, '\n')                            // Convert escaped \n to actual newlines
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Convert **text** to <strong>
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')             // Convert *text* to <em>
+    .replace(/\(CID:\s*(\d+)\)/g, '<strong>(CID: $1)</strong>') // Bold CID numbers
+    .replace(/CID:\s*(\d+)/g, '<strong>CID: $1</strong>') // Bold CID: pattern without parentheses
+    .replace(/\n/g, '<br>');                           // Convert newlines to <br>
+  
+  messageContent.innerHTML = formattedText;
+
+  // messageContent.textContent = text;
 
   messageDiv.appendChild(messageContent);
   chatBody.appendChild(messageDiv);
@@ -112,8 +124,8 @@ function getOrCreateSessionId() {
   let session = JSON.parse(localStorage.getItem("session"));
 
   if (!session) {
-    const session = JSON.stringify({"gck": "test_user", "session_id": crypto.randomUUID()});
-    localStorage.setItem("session", session);
+    session = {"gck": "test_user", "session_id": crypto.randomUUID()};
+    localStorage.setItem("session", JSON.stringify(session));
   }
 
   return session;
@@ -150,7 +162,7 @@ async function sendMessage() {
   audioBtn.classList.remove("hidden");
 
   // Fetch current session id.
-  const session = getOrCreateSessionId();
+  const session = await getOrCreateSessionId();
 
   // Show typing indicator
   showTypingIndicator();
@@ -211,12 +223,30 @@ async function sendMessage() {
       })
     });
 
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+
     const data = await response.json();
-    console.log(data);
-    console.log(data['reply']);
+    console.log("API Response:", data);
 
     removeTypingIndicator();
-    addMessage(data['reply'], "bot");
+    
+    // Check if reply exists in response
+    if (data && data['reply']) {
+      addMessage(data['reply'], "bot");
+    } else {
+      console.error("No reply in response:", data);
+      addMessage("❌ No response received from server. Please try again.", "bot");
+    }
+
+
+    // const data = await response.json();
+    // console.log(data);
+    // console.log(data['reply']);
+
+    // removeTypingIndicator();
+    // addMessage(data['reply'], "bot");
 
   } catch (error) {
     console.error("Error:", error);
@@ -375,7 +405,7 @@ function getAudioBlob() {
 // ------- ANKIT ---------
 // This function is used to perform the Real time "Speech-to-Text" Conversion using GROQ API.
 async function transcribeAudio(blob) {
-  const apiKey = "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";
+  const apiKey = "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";
 
   // Convert blob to file
   const audioFile = new File([blob], "audio.webm", {
@@ -475,7 +505,7 @@ async function stopRecording(cancelled = false) {
     });
 
     // Session ID to be either created or assigned.
-    const session = getOrCreateSessionId();
+    const session = await getOrCreateSessionId();
 
     // Show typing indicator
     showTypingIndicator();
