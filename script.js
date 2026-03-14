@@ -212,15 +212,23 @@ async function sendMessage() {
   // --- Step 2: Send message to backend ---
   // ----- DO NOT TAMPER CODE -----
   try {
-    const response = await fetch("https://api.cesc.co.in/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    
+    let file_name = ""
+    if (uploadedFileName != ""){
+      file_name = `${session.gck}/${session.session_id}/${uploadedFileName}`;
+    }
+
+    const body = JSON.stringify({
         "user_id": session.gck,
         "session_id": session.session_id,
         "text": hasText ? message : `[File: ${uploadedFileName}]`,
-        "document_file_name": `${session.gck}/${session.session_id}/${uploadedFileName}`
-      })
+        "document_file_name": file_name 
+    });
+
+    const response = await fetch("https://api.cesc.co.in/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body 
     });
 
     if (!response.ok) {
