@@ -28,6 +28,71 @@ let mediaRecorder = null;
 let audioChunks = [];
 let pendingFile = null; // File staged for upload, waiting for Send press
 
+// --------------------- ANKIT --------------------- 
+// ===================================
+// LOCATION PERMISSION (one-time, on first message)
+// ===================================
+
+/**
+ * Requests geolocation permission exactly once.
+ * - If localStorage already has a value (coords or "NA"), resolves immediately.
+ * - Otherwise shows the browser permission popup:
+ *     Accepted  → stores { lat, lng } in localStorage as JSON.
+ *     Rejected  → stores "NA" for both lat and lng.
+ * Returns a Promise that always resolves (never rejects) so the chat flow
+ * continues regardless of the user's choice.
+ */
+function requestLocationIfNeeded() {
+  return new Promise((resolve) => {
+    // Already stored — skip
+    if (sessionStorage.getItem("userLat") !== null) {
+      resolve();
+      return;
+    }
+
+    else {
+      if (!navigator.geolocation) {
+        // Browser doesn't support geolocation
+        sessionStorage.setItem("userLat", "NA");
+        sessionStorage.setItem("userLng", "NA");
+        resolve();
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          // User accepted
+          sessionStorage.setItem("userLat", position.coords.latitude);
+          sessionStorage.setItem("userLng", position.coords.longitude);
+          console.log("Location stored:", position.coords.latitude, position.coords.longitude);
+          resolve();
+        },
+        () => {
+          // User rejected / error
+          sessionStorage.setItem("userLat", "NA");
+          sessionStorage.setItem("userLng", "NA");
+          console.log("Location denied — stored NA");
+          resolve();
+        }
+      );
+    }
+  });
+}
+
+/**
+ * Reads the stored user coordinates from sessionStorage.
+ * Returns { lat, lng } where each value is either a number or "NA".
+ * Call this right before every backend API request.
+ */
+function getUserLocation() {
+  const lat = sessionStorage.getItem("userLat") ?? "NA";
+  const lng = sessionStorage.getItem("userLng") ?? "NA";
+  return {
+    lat: lat !== "NA" ? parseFloat(lat) : "NA",
+    lng: lng !== "NA" ? parseFloat(lng) : "NA"
+  };
+}
+
 // ===================================
 // CHAT BUBBLE & CHATBOT TOGGLE
 // ===================================
@@ -66,17 +131,27 @@ function addMessage(text, sender) {
 
   const messageContent = document.createElement("div");
   messageContent.classList.add("message-content");
-  
-  // Convert markdown formatting to HTML
+
+  // Convert Markdown to HTML.
   let formattedText = text
-    .replace(/\\n/g, '\n')                            // Convert escaped \n to actual newlines
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Convert **text** to <strong>
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')             // Convert *text* to <em>
-    .replace(/\(CID:\s*(\d+)\)/g, '<strong>(CID: $1)</strong>') // Bold CID numbers
-    .replace(/CID:\s*(\d+)/g, '<strong>CID: $1</strong>') // Bold CID: pattern without parentheses
-    .replace(/\n/g, '<br>');                           // Convert newlines to <br>
-  
-  messageContent.innerHTML = formattedText;
+    .replace(/\\n/g, '\n')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\(CID:\s*(\d+)\)/g, '<strong>(CID: $1)</strong>')
+    .replace(/CID:\s*(\d+)/g, '<strong>CID: $1</strong>')
+    .replace(/\n/g, '<br>');
+
+  // For Processing the URL's
+  if (sender === "bot") {
+    const urlRegex = /(https?:\/\/[^\s<]+)/g;  // ← Stop matching at < as well
+    const linkedText = formattedText.replace(urlRegex, url => {
+      const cleanUrl = url.replace(/(<br>|<[^>]+>)+$/g, '').replace(/[.,;!?]+$/, ''); // Strip trailing tags & punctuation
+      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" style="color:#0066B3;text-decoration:underline;">Click Here</a>`;
+    });
+    messageContent.innerHTML = linkedText;
+  } else {
+    messageContent.innerHTML = formattedText;
+  }
 
   // messageContent.textContent = text;
 
@@ -124,7 +199,7 @@ function getOrCreateSessionId() {
   let session = JSON.parse(localStorage.getItem("session"));
 
   if (!session) {
-    session = {"gck": "test_user", "session_id": crypto.randomUUID()};
+    session = { "gck": "test_user", "session_id": crypto.randomUUID() };
     localStorage.setItem("session", JSON.stringify(session));
   }
 
@@ -140,6 +215,9 @@ async function sendMessage() {
   // Nothing to send
   if (!hasText && !hasFile) return;
 
+  // Request location on first message (no-op if already stored)
+  await requestLocationIfNeeded();
+
   // Build user-facing bubble label
   let userLabel = "";
   if (hasFile && hasText) {
@@ -152,6 +230,10 @@ async function sendMessage() {
   addMessage(userLabel, "user");
 
   userInput.value = "";
+  userInput.disabled = true;
+  audioBtn.disabled = true;
+  audioBtn.style.backgroundColor = "red";
+
   const fileToUpload = pendingFile;
   clearFileChip();
 
@@ -212,23 +294,29 @@ async function sendMessage() {
   // --- Step 2: Send message to backend ---
   // ----- DO NOT TAMPER CODE -----
   try {
-    
+
     let file_name = ""
-    if (uploadedFileName != ""){
+    if (uploadedFileName != "") {
       file_name = `${session.gck}/${session.session_id}/${uploadedFileName}`;
     }
 
+    const { lat, lng } = getUserLocation();
+    console.log("Sending with location — lat:", lat, "lng:", lng);
+
     const body = JSON.stringify({
-        "user_id": session.gck,
-        "session_id": session.session_id,
-        "text": hasText ? message : `[File: ${uploadedFileName}]`,
-        "document_file_name": file_name 
+      "user_id": session.gck,
+      "session_id": session.session_id,
+      "text": hasText ? message : `[File: ${uploadedFileName}]`,
+      "document_file_name": file_name,
+      "user_lat": lat,
+      "user_long": lng,
+      "channel": "WEB"
     });
 
     const response = await fetch("https://api.cesc.co.in/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: body 
+      body: body
     });
 
     if (!response.ok) {
@@ -239,7 +327,7 @@ async function sendMessage() {
     console.log("API Response:", data);
 
     removeTypingIndicator();
-    
+
     // Check if reply exists in response
     if (data && data['reply']) {
       addMessage(data['reply'], "bot");
@@ -247,6 +335,10 @@ async function sendMessage() {
       console.error("No reply in response:", data);
       addMessage("❌ No response received from server. Please try again.", "bot");
     }
+
+    userInput.disabled = false;
+    audioBtn.disabled = false;
+    audioBtn.style.backgroundColor = "#0066B3";
 
 
     // const data = await response.json();
@@ -413,31 +505,39 @@ function getAudioBlob() {
 // ------- ANKIT ---------
 // This function is used to perform the Real time "Speech-to-Text" Conversion using GROQ API.
 async function transcribeAudio(blob) {
-  const apiKey = "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";
 
-  // Convert blob to file
-  const audioFile = new File([blob], "audio.webm", {
-    type: blob.type || "audio/webm"
-  });
+  try {
+    const apiKey = "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";
 
-  const formData = new FormData();
-  formData.append("file", audioFile);
-  formData.append("model", "whisper-large-v3");
+    // Convert blob to file
+    const audioFile = new File([blob], "audio.webm", {
+      type: blob.type || "audio/webm"
+    });
 
-  const response = await fetch(
-    "https://api.groq.com/openai/v1/audio/transcriptions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: formData
-    }
-  );
+    const formData = new FormData();
+    formData.append("file", audioFile);
+    formData.append("model", "whisper-large-v3-turbo");
+    formData.append("language", "en");
+    formData.append("temperature", "0.0");
 
-  const data = await response.json();
-  console.log(data);
-  return data.text;
+    const response = await fetch(
+      "https://api.groq.com/openai/v1/audio/transcriptions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: formData
+      }
+    );
+
+    const data = await response.json();
+    console.log(data);
+    return data.text;
+  }
+  catch (error) {
+    return "❌ Could not process the audio currently.";
+  }
 }
 
 async function startRecording() {
@@ -496,7 +596,14 @@ async function stopRecording(cancelled = false) {
   audioBtn.classList.remove("hidden");
   recordingTimer.textContent = "0:00";
 
+  userInput.disabled = true;
+  audioBtn.disabled = true;
+  audioBtn.style.backgroundColor = "red";
+
   if (!cancelled) {
+    // Request location on first message (no-op if already stored)
+    await requestLocationIfNeeded();
+
     // The transcribed text will be shown as the user message after transcription.
 
     // Wait for the mediaRecorder 'stop' event to fire and attach the blob,
@@ -528,6 +635,9 @@ async function stopRecording(cancelled = false) {
     addMessage(transcribedMsg, "user");
 
     try {
+      const { lat, lng } = getUserLocation();
+      console.log("Sending audio with location — lat:", lat, "lng:", lng);
+
       const response = await fetch("https://api.cesc.co.in/chat", {
         method: "POST",
         headers: {
@@ -537,7 +647,10 @@ async function stopRecording(cancelled = false) {
           "user_id": session.gck,
           "session_id": session.session_id,
           "text": transcribedMsg,
-          "document_file_name": ""
+          "document_file_name": "",
+          "user_lat": lat,
+          "user_long": lng,
+          "channel": "WEB"
         })
       });
 
@@ -548,6 +661,11 @@ async function stopRecording(cancelled = false) {
 
       removeTypingIndicator();
       addMessage(data['reply'], "bot");
+
+
+      userInput.disabled = false;
+      audioBtn.disabled = false;
+      audioBtn.style.backgroundColor = "#0066B3";
 
     } catch (error) {
       console.error("Error:", error);
