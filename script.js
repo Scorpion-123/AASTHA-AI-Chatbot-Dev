@@ -507,7 +507,7 @@ function getAudioBlob() {
 async function transcribeAudio(blob) {
 
   try {
-    const apiKey = "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";
+    const apiKey = "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";
 
     // Convert blob to file
     const audioFile = new File([blob], "audio.webm", {
