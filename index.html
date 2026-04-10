@@ -5,91 +5,101 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CESC Help & Support</title>
   <link rel="stylesheet" href="styles.css">
-  <!-- FontAwesome for icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
+
 <!-- Chat Bubble -->
 <div class="chat-bubble" id="chatBubble">
-  <img src="./images/ebuddy-icon.png" alt="Chat Icon" onerror="this.style.display='none'">
+  <img src="./images/ebuddy-icon.png" alt="Chat with Aastha" onerror="this.style.display='none'">
 </div>
+
 <!-- Chatbot -->
 <div class="chatbot" id="chatbot">
-  <!-- Header with Company Logos -->
+
+  <!-- Header: flat #0D2B5E bar, single CESC logo + bot name, 56dp height -->
   <div class="chat-header">
     <div class="header-left">
-      <!-- CESC Logo (Left) -->
-      <div class="company-logo cesc-logo">
-        <img src="./images/header-icon.png" alt="RP-Sanjiv Goenka Group" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA4MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iNDAiIGZpbGw9IndoaXRlIi8+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiMwMDY2QjMiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5DRVNDPC90ZXh0Pgo8L3N2Zz4='">
+      <div class="header-logo">
+        <img src="./images/cesc-icon.png" alt="CESC Limited"
+          onerror="this.style.display='none'">
+      </div>
+      <div class="header-bot-info">
+        <span class="header-bot-name">Aastha</span>
+        <span class="header-bot-status">AI Assistant</span>
       </div>
     </div>
     <div class="header-actions">
-      <!-- RP-Sanjiv Goenka Logo (Right) -->
-      <div class="company-logo rp-logo">
-        <img src="./images/cesc-icon.png" alt="CESC Limited" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA4MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iODAiIGhlaWdodD0iNDAiIGZpbGw9IndoaXRlIi8+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiM4ODMzOTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5SUC1TRzwvdGV4dD4KPC9zdmc+'">
-      </div>
-      <span id="minimizeBtn" class="header-btn">—</span>
-      <span id="closeBtn" class="header-btn">✕</span>
+      <span id="minimizeBtn" class="header-btn" title="Minimise" aria-label="Minimise chat">—</span>
+      <span id="closeBtn"    class="header-btn" title="Close"    aria-label="Close chat">✕</span>
     </div>
   </div>
+
   <!-- Chat Body -->
   <div class="chat-body" id="chatBody">
     <div class="message bot">
       <div class="message-content">
-       Dear Consumer, Welcome to CESC Limited. I am Aastha, your AI-powered assistant, here to support you with 
-       your requests and ensure safe, reliable service. Please let me know how I may assist you today.
+        Dear Consumer, Welcome to CESC Limited. I am Aastha, your AI-powered assistant, here to support you with
+        your requests and ensure safe, reliable service. Please let me know how I may assist you today.
       </div>
     </div>
   </div>
+
   <!-- Footer -->
   <div class="chat-footer">
-    <label for="fileUpload" class="attach-icon" id="attachLabel">
-      <i class="fas fa-paperclip"></i>
-    </label>
-    <input type="file" id="fileUpload" hidden accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg">
 
-    <!-- Input + file preview column -->
-    <div class="input-col" id="inputCol">
-      <!-- File preview chip (shown after file is selected, before send) -->
-      <div class="file-preview-bar" id="filePreviewBar" style="display:none;">
-        <span class="file-chip">
-          <i class="fas fa-paperclip"></i>
-          <span id="filePreviewName"></span>
-          <button class="file-chip-remove" id="fileChipRemove" title="Remove file">✕</button>
-        </span>
-      </div>
-
-      <!-- Input field wrapper -->
-      <div class="input-wrapper" id="inputWrapper">
-        <input type="text" id="userInput" placeholder="Type your message..." autocomplete="off">
+    <!-- Attachment Preview Slot — dedicated row above input, persistent until sent or dismissed -->
+    <div class="attachment-preview-slot" id="attachmentPreviewSlot" style="display:none;">
+      <div class="attachment-preview-card" id="attachmentPreviewCard">
+        <img  class="attach-preview-thumb" id="attachThumb"    style="display:none;" alt="File preview">
+        <div  class="attach-preview-icon"  id="attachFileIcon"><i class="fas fa-file-alt"></i></div>
+        <div  class="attach-preview-info">
+          <span class="attach-preview-name" id="attachName"></span>
+          <span class="attach-preview-ext"  id="attachType"></span>
+        </div>
+        <button class="attach-preview-dismiss" id="fileChipRemove"
+                title="Remove attachment" aria-label="Remove attachment">✕</button>
       </div>
     </div>
-    
-    <!-- Recording UI (hidden by default) -->
-    <div class="recording-ui" id="recordingUI">
-      <div class="recording-animation">
-        <div class="recording-dot"></div>
-        <span class="recording-timer" id="recordingTimer">0:00</span>
+
+    <!-- Input Row — always full-width, unaffected by attachment slot -->
+    <div class="input-row">
+      <label for="fileUpload" class="attach-icon" id="attachLabel" aria-label="Attach file">
+        <i class="fas fa-paperclip"></i>
+      </label>
+      <input type="file" id="fileUpload" hidden accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg">
+
+      <div class="input-wrapper" id="inputWrapper">
+        <input type="text" id="userInput" placeholder="Type your message…" autocomplete="off"
+               aria-label="Type your message">
       </div>
-      <div class="recording-waveform" id="waveform">
-        <span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span>
+
+      <!-- Recording UI (hidden by default) -->
+      <div class="recording-ui" id="recordingUI">
+        <div class="recording-animation">
+          <div class="recording-dot"></div>
+          <span class="recording-timer" id="recordingTimer">0:00</span>
+        </div>
+        <div class="recording-waveform" id="waveform">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <button class="cancel-recording" id="cancelRecording" aria-label="Cancel recording">
+          <i class="fas fa-trash"></i>
+        </button>
       </div>
-      <button class="cancel-recording" id="cancelRecording">
-        <i class="fas fa-trash"></i>
+
+      <button id="audioBtn" class="audio-btn active" aria-label="Record voice message">
+        <i class="fas fa-microphone"></i>
+      </button>
+      <button id="sendBtn"  class="send-btn" aria-label="Send message">
+        <i class="fas fa-paper-plane"></i>
       </button>
     </div>
-    
-    <!-- Audio Button -->
-    <button id="audioBtn" class="audio-btn active">
-      <i class="fas fa-microphone"></i>
-    </button>
-    <!-- Send Button -->
-    <button id="sendBtn" class="send-btn">
-      <i class="fas fa-paper-plane"></i>
-    </button>
+
   </div>
 </div>
+
 <script src="script.js"></script>
 </body>
 </html>
