@@ -95,6 +95,14 @@ minimizeBtn.addEventListener("click", function () {
   setTimeout(() => { chatBubble.style.display = "flex"; }, 300);
 });
 
+// Clean up SSE connection when page unloads
+window.addEventListener("beforeunload", function () {
+  if (eventSource) {
+    eventSource.close();
+    console.log("SSE connection closed");
+  }
+});
+
 // ===================================
 // MESSAGE HANDLING
 // ===================================
@@ -228,6 +236,104 @@ function getOrCreateSessionId() {
     localStorage.setItem("session", JSON.stringify(session));
   }
   return session;
+}
+
+
+// ------- ANKIT --------- 
+// ===================================
+// SSE - REAL-TIME OUTAGE NOTIFICATIONS
+// ===================================
+
+let eventSource = null;
+
+function initializeSSE() {
+  // const session = getOrCreateSessionId();
+  // const sseUrl = `https://api.cesc.co.in/notification-stream/${session.gck}`;
+  const sseUrl = "https://api.cesc.co.in/notification-stream/test_user";
+  
+  // Close existing connection if any
+  if (eventSource) {
+    eventSource.close();
+  }
+  
+  try {
+    eventSource = new EventSource(sseUrl);
+    
+    eventSource.onopen = () => {
+      console.log("SSE connected to outage stream");
+    };
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("SSE RECEIVED:", data);
+        
+        // Display the outage notification in chat
+        displayOutageNotification(data);
+        
+      } catch (error) {
+        console.error("Error parsing SSE data:", error);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error("SSE ERROR:", error);
+      
+      // Attempt to reconnect after 5 seconds
+      if (eventSource.readyState === EventSource.CLOSED) {
+        console.log("SSE connection closed. Reconnecting in 5 seconds...");
+        setTimeout(initializeSSE, 5000);
+      }
+    };
+    
+  } catch (error) {
+    console.error("Failed to initialize SSE:", error);
+  }
+}
+
+function displayOutageNotification(data) {
+  // Create a special outage notification message
+  const messageDiv = document.createElement("div");
+  messageDiv.classList.add("message", "bot", "outage-notification");
+  
+  const messageContent = document.createElement("div");
+  messageContent.classList.add("message-content");
+  
+  // Format the outage notification
+  let notificationText = "⚠️ **Outage Alert**\n\n";
+  
+  if (data.message) {
+    notificationText += data.message;
+  } else {
+    // Build message from data fields
+    if (data.area) notificationText += `**Area:** ${data.area}\n`;
+    if (data.status) notificationText += `**Status:** ${data.status}\n`;
+    if (data.estimated_restoration) notificationText += `**Estimated Restoration:** ${data.estimated_restoration}\n`;
+    if (data.affected_consumers) notificationText += `**Affected Consumers:** ${data.affected_consumers}\n`;
+    if (data.reason) notificationText += `**Reason:** ${data.reason}\n`;
+  }
+  
+  // Format the text with markdown-style formatting
+  let formattedText = notificationText
+    .replace(/\\n/g, '\n')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+  
+  messageContent.innerHTML = formattedText;
+  messageDiv.appendChild(messageContent);
+  chatBody.appendChild(messageDiv);
+  chatBody.scrollTop = chatBody.scrollHeight;
+  
+  // Optional: Show a browser notification if the chatbot is minimized
+  if (!chatbot.classList.contains("active") && "Notification" in window) {
+    if (Notification.permission === "granted") {
+      new Notification("CESC Outage Alert", {
+        body: data.message || "New outage notification received",
+        icon: "/path/to/cesc-icon.png" // Update with actual icon path
+      });
+    }
+  }
 }
 
 // ===================================
@@ -509,10 +615,36 @@ function getAudioBlob() {
   });
 }
 
+
+// ------- ANKIT ---------
+// Use this API to fetch the GROQ API KEY from Amazon Lambda (so that we do not expose api key in prod).
+async function getApiKey() {
+    try {
+        const response = await fetch("https://28iqvhtgm1.execute-api.ap-south-1.amazonaws.com/dev/apiKey", {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json"
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.api_key;
+
+    } catch (error) {
+        console.error("Error fetching GROQ API key:", error);
+        throw error;
+    }
+}
+
+
 // ------- ANKIT ---------
 async function transcribeAudio(blob) {
   try {
-    const apiKey   = "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";
+    const apiKey   =  await getApiKey();
     const audioFile = new File([blob], "audio.webm", { type: blob.type || "audio/webm" });
     const formData  = new FormData();
     formData.append("file",        audioFile);
@@ -670,5 +802,13 @@ audioBtn.classList.add("active");
 audioBtn.classList.remove("hidden");
 sendBtn.classList.remove("active");
 sendBtn.classList.add("hidden");
+
+// Initialize SSE connection for real-time outage notifications
+initializeSSE();
+
+// Request notification permission (optional)
+if ("Notification" in window && Notification.permission === "default") {
+  Notification.requestPermission();
+}
 
 console.log("CESC Chatbot initialised — P1 design tokens applied.");
