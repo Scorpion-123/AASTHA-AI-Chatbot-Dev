@@ -248,8 +248,8 @@ let eventSource = null;
 
 function initializeSSE() {
   // const session = getOrCreateSessionId();
-  // const sseUrl = `https://api.cesc.co.in/notification-stream/${session.gck}`;
-  const sseUrl = "https://api.cesc.co.in/notification-stream/test_user";
+  // const sseUrl = `https://.co.in/notification-stream/${session.gck}`;
+  const sseUrl = "https://.co.in/notification-stream/test_user";
   
   // Close existing connection if any
   if (eventSource) {
@@ -430,7 +430,7 @@ async function sendMessage() {
     const { lat, lng } = getUserLocation();
     console.log("Sending with location — lat:", lat, "lng:", lng);
 
-    const response = await fetch("https://api.cesc.co.in/chat", {
+    const response = await fetch("https://dev-api.cesc.co.in/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -740,7 +740,7 @@ async function stopRecording(cancelled = false) {
     try {
       const { lat, lng } = getUserLocation();
 
-      const response = await fetch("https://api.cesc.co.in/chat", {
+      const response = await fetch("https://dev-api.cesc.co.in/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
