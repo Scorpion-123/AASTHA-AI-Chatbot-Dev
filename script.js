@@ -232,7 +232,7 @@ function removeTypingIndicator() {
 function getOrCreateSessionId() {
   let session = JSON.parse(localStorage.getItem("session"));
   if (!session) {
-    session = { "gck": "test_user", "session_id": crypto.randomUUID() };
+    session = { "gck": "test_user_dev", "session_id": crypto.randomUUID() };
     localStorage.setItem("session", JSON.stringify(session));
   }
   return session;
@@ -249,7 +249,7 @@ let eventSource = null;
 function initializeSSE() {
   // const session = getOrCreateSessionId();
   // const sseUrl = `https://.co.in/notification-stream/${session.gck}`;
-  const sseUrl = "https://.co.in/notification-stream/test_user";
+  const sseUrl = "https://api.cesc.co.in/notification-stream/test_user";
   
   // Close existing connection if any
   if (eventSource) {
