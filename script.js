@@ -249,7 +249,7 @@ let eventSource = null;
 function initializeSSE() {
   // const session = getOrCreateSessionId();
   // const sseUrl = `https://.co.in/notification-stream/${session.gck}`;
-  const sseUrl = "https://api.cesc.co.in/notification-stream/test_user";
+  const sseUrl = "https://api.cesc.co.in/notification-stream/test_user_dev";
   
   // Close existing connection if any
   if (eventSource) {
