@@ -3,36 +3,40 @@
 // ===================================
 
 // DOM Elements
-const chatBubble      = document.getElementById("chatBubble");
-const chatbot         = document.getElementById("chatbot");
-const closeBtn        = document.getElementById("closeBtn");
-const minimizeBtn     = document.getElementById("minimizeBtn");
-const userInput       = document.getElementById("userInput");
-const sendBtn         = document.getElementById("sendBtn");
-const audioBtn        = document.getElementById("audioBtn");
-const chatBody        = document.getElementById("chatBody");
-const fileUpload      = document.getElementById("fileUpload");
-const recordingUI     = document.getElementById("recordingUI");
-const inputWrapper    = document.getElementById("inputWrapper");
+const chatBubble = document.getElementById("chatBubble");
+const chatbot = document.getElementById("chatbot");
+const closeBtn = document.getElementById("closeBtn");
+const minimizeBtn = document.getElementById("minimizeBtn");
+const userInput = document.getElementById("userInput");
+const sendBtn = document.getElementById("sendBtn");
+const audioBtn = document.getElementById("audioBtn");
+const chatBody = document.getElementById("chatBody");
+const fileUpload = document.getElementById("fileUpload");
+const recordingUI = document.getElementById("recordingUI");
+const inputWrapper = document.getElementById("inputWrapper");
 const cancelRecording = document.getElementById("cancelRecording");
-const recordingTimer  = document.getElementById("recordingTimer");
-const fileChipRemove  = document.getElementById("fileChipRemove");
+const recordingTimer = document.getElementById("recordingTimer");
+const fileChipRemove = document.getElementById("fileChipRemove");
 
 // Attachment preview slot elements
 const attachmentPreviewSlot = document.getElementById("attachmentPreviewSlot");
-const attachThumb           = document.getElementById("attachThumb");
-const attachFileIcon        = document.getElementById("attachFileIcon");
-const attachName            = document.getElementById("attachName");
-const attachType            = document.getElementById("attachType");
+const attachThumb = document.getElementById("attachThumb");
+const attachFileIcon = document.getElementById("attachFileIcon");
+const attachName = document.getElementById("attachName");
+const attachType = document.getElementById("attachType");
 
 // State
-let isRecording        = false;
-let recordingInterval  = null;
+let isRecording = false;
+let recordingInterval = null;
 let recordingStartTime = 0;
-let mediaRecorder      = null;
-let audioChunks        = [];
-let pendingFile        = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let pendingFile = null;
 let pendingFileDataUrl = null;
+
+// Session inactivity timeout — 15 minutes
+const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+let sessionTimeoutHandle = null;
 
 // P1 colour token — used for button resets in JS
 const COLOR_PRIMARY = "#0056B3";
@@ -114,25 +118,49 @@ function addMessage(text, sender) {
   const messageContent = document.createElement("div");
   messageContent.classList.add("message-content");
 
-  let formattedText = text
-    .replace(/\\n/g, '\n')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/\(CID:\s*(\d+)\)/g, '<strong>(CID: $1)</strong>')
-    .replace(/CID:\s*(\d+)/g, '<strong>CID: $1</strong>')
-    .replace(/\n/g, '<br>');
+  // Clean up explicit newlines from json payloads
+  let cleanText = text.replace(/\\n/g, '\n');
 
-  if (sender === "bot") {
-    const urlRegex = /(https?:\/\/[^\s<]+)/g;
-    const linkedText = formattedText.replace(urlRegex, url => {
-      const cleanUrl = url.replace(/(<br>|<[^>]+>)+$/g, '').replace(/[.,;!?]+$/, '');
-      return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer"
-                 style="color:#0056B3;text-decoration:underline;">Click Here</a>`;
-    });
-    messageContent.innerHTML = linkedText;
+  // Apply our custom specific regex replacements
+  cleanText = cleanText
+    .replace(/\(CID:\s*(\d+)\)/g, '**(CID: $1)**')
+    .replace(/CID:\s*(\d+)/g, '**CID: $1**');
+
+  let formattedText = "";
+  if (typeof marked !== 'undefined') {
+    // Create a custom renderer to safely intercept and format all links
+    const renderer = new marked.Renderer();
+    renderer.link = function ({ href, title, text }) { // marked automatically resolves these
+      if (sender === "bot") {
+        // If the URL was raw (text equals the long link), shorten it to "Click Here"
+        // Otherwise, preserve the markdown link text if it was explicitly provided
+        const linkLabel = (text === href || text === href.replace(/^https?:\/\//, '')) ? 'Click Here' : text;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#0056B3;text-decoration:underline;">${linkLabel}</a>`;
+      }
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    };
+
+    // Parse tables and all standard markdown natively including links
+    formattedText = marked.parse(cleanText, { breaks: true, renderer: renderer });
   } else {
-    messageContent.innerHTML = formattedText;
+    // Basic fallback if marked doesn't load
+    formattedText = cleanText
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
+
+    // Apply the old regex logic ONLY if marked failed to load
+    if (sender === "bot") {
+      const urlRegex = /(https?:\/\/[^\s<"']+)/g;
+      formattedText = formattedText.replace(urlRegex, url => {
+        if (url.includes('href="')) return url;
+        const cleanUrl = url.replace(/(<br>|<[^>]+>)+$/g, '').replace(/[.,;!?]+$/, '');
+        return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer" style="color:#0056B3;text-decoration:underline;">Click Here</a>`;
+      });
+    }
   }
+
+  messageContent.innerHTML = formattedText;
 
   messageDiv.appendChild(messageContent);
   chatBody.appendChild(messageDiv);
@@ -151,6 +179,7 @@ function addFileMessage(file, caption, dataUrl) {
   card.classList.add("sent-attachment-card");
 
   const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
   const ext = file.name.split(".").pop().toUpperCase();
 
   if (isImage && dataUrl) {
@@ -159,10 +188,23 @@ function addFileMessage(file, caption, dataUrl) {
     thumb.alt = file.name;
     thumb.classList.add("sent-attach-thumb-img");
     card.appendChild(thumb);
+  } else if (isVideo && dataUrl) {
+    const videoEl = document.createElement("video");
+    videoEl.src = dataUrl;
+    videoEl.controls = true;
+    videoEl.muted = false;
+    videoEl.autoplay = false;
+    videoEl.loop = false;
+    videoEl.playsInline = true;          // prevent iOS from auto-fullscreening
+    videoEl.preload = "metadata";        // loads first frame → no black poster
+    videoEl.classList.add("sent-attach-thumb-video");
+    card.appendChild(videoEl);
   } else {
     const banner = document.createElement("div");
     banner.classList.add("sent-attach-icon-banner");
-    banner.innerHTML = '<i class="fas fa-file-alt"></i>';
+    banner.innerHTML = isVideo
+      ? '<i class="fas fa-video"></i>'
+      : '<i class="fas fa-file-alt"></i>';
     card.appendChild(banner);
   }
 
@@ -232,12 +274,48 @@ function removeTypingIndicator() {
 function getOrCreateSessionId() {
   let session = JSON.parse(localStorage.getItem("session"));
   if (!session) {
-    session = { "gck": "test_user_dev", "session_id": crypto.randomUUID() };
+    session = { "gck": "test_user", "session_id": crypto.randomUUID() };
     localStorage.setItem("session", JSON.stringify(session));
   }
   return session;
 }
 
+// ===================================
+// SESSION INACTIVITY TIMER
+// ===================================
+
+/**
+ * Call this every time the user sends any message (text, file, or voice).
+ * Cancels the previous countdown and starts a fresh 15-minute window.
+ * If the window expires without another message, session_id is rotated to a
+ * new UUID so the next interaction automatically starts a fresh backend session.
+ */
+function resetSessionTimer() {
+  // Cancel any pending expiry
+  if (sessionTimeoutHandle !== null) {
+    clearTimeout(sessionTimeoutHandle);
+    sessionTimeoutHandle = null;
+  }
+
+  sessionTimeoutHandle = setTimeout(() => {
+    // Rotate only session_id, keep gck (user identity) intact
+    const session = JSON.parse(localStorage.getItem("session")) || { gck: "test_user" };
+    const oldId = session.session_id;
+    session.session_id = crypto.randomUUID();
+    localStorage.setItem("session", JSON.stringify(session));
+
+    console.log(
+      `[Session] Inactivity timeout — session rotated.\n` +
+      `  Old ID : ${oldId}\n` +
+      `  New ID : ${session.session_id}`
+    );
+
+    // Reconnect SSE so the new session_id propagates to the notification stream
+    initializeSSE();
+
+    sessionTimeoutHandle = null;
+  }, SESSION_TIMEOUT_MS);
+}
 
 // ------- ANKIT --------- 
 // ===================================
@@ -247,90 +325,118 @@ function getOrCreateSessionId() {
 let eventSource = null;
 
 function initializeSSE() {
-  // const session = getOrCreateSessionId();
-  // const sseUrl = `https://.co.in/notification-stream/${session.gck}`;
-  const sseUrl = "https://api.cesc.co.in/notification-stream/test_user_dev";
-  
+  const session = getOrCreateSessionId();
+  const sseUrl = `https://api.cesc.co.in/notification-stream/${session.gck}`;
+
   // Close existing connection if any
   if (eventSource) {
     eventSource.close();
   }
-  
+
   try {
     eventSource = new EventSource(sseUrl);
-    
+
     eventSource.onopen = () => {
       console.log("SSE connected to outage stream");
     };
-    
+
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         console.log("SSE RECEIVED:", data);
-        
-        // Display the outage notification in chat
-        displayOutageNotification(data);
-        
+
+        // Route to the correct notification style based on type
+        if (data.type === "payment") {
+          displayPaymentNotification(data);
+        } else {
+          displayOutageNotification(data);
+        }
+
       } catch (error) {
         console.error("Error parsing SSE data:", error);
       }
     };
-    
+
     eventSource.onerror = (error) => {
       console.error("SSE ERROR:", error);
-      
+
       // Attempt to reconnect after 5 seconds
       if (eventSource.readyState === EventSource.CLOSED) {
         console.log("SSE connection closed. Reconnecting in 5 seconds...");
         setTimeout(initializeSSE, 5000);
       }
     };
-    
+
   } catch (error) {
     console.error("Failed to initialize SSE:", error);
   }
 }
 
 function displayOutageNotification(data) {
-  // Create a special outage notification message
   const messageDiv = document.createElement("div");
   messageDiv.classList.add("message", "bot", "outage-notification");
-  
+
   const messageContent = document.createElement("div");
   messageContent.classList.add("message-content");
-  
-  // Format the outage notification
+
   let notificationText = "⚠️ **Outage Alert**\n\n";
-  
+
   if (data.message) {
     notificationText += data.message;
   } else {
-    // Build message from data fields
     if (data.area) notificationText += `**Area:** ${data.area}\n`;
     if (data.status) notificationText += `**Status:** ${data.status}\n`;
     if (data.estimated_restoration) notificationText += `**Estimated Restoration:** ${data.estimated_restoration}\n`;
     if (data.affected_consumers) notificationText += `**Affected Consumers:** ${data.affected_consumers}\n`;
     if (data.reason) notificationText += `**Reason:** ${data.reason}\n`;
   }
-  
-  // Format the text with markdown-style formatting
+
   let formattedText = notificationText
     .replace(/\\n/g, '\n')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/\n/g, '<br>');
-  
+
   messageContent.innerHTML = formattedText;
   messageDiv.appendChild(messageContent);
   chatBody.appendChild(messageDiv);
   chatBody.scrollTop = chatBody.scrollHeight;
-  
-  // Optional: Show a browser notification if the chatbot is minimized
+
   if (!chatbot.classList.contains("active") && "Notification" in window) {
     if (Notification.permission === "granted") {
       new Notification("CESC Outage Alert", {
         body: data.message || "New outage notification received",
-        icon: "/path/to/cesc-icon.png" // Update with actual icon path
+        icon: "/path/to/cesc-icon.png"
+      });
+    }
+  }
+}
+
+function displayPaymentNotification(data) {
+  const messageDiv = document.createElement("div");
+  messageDiv.classList.add("message", "bot", "payment-notification");
+
+  const messageContent = document.createElement("div");
+  messageContent.classList.add("message-content");
+
+  const notificationText = "✅ **Payment Confirmed**\n\n" + (data.message || "Your payment has been received.");
+
+  let formattedText = notificationText
+    .replace(/\\n/g, '\n')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+
+  messageContent.innerHTML = formattedText;
+  messageDiv.appendChild(messageContent);
+  chatBody.appendChild(messageDiv);
+  chatBody.scrollTop = chatBody.scrollHeight;
+
+  if (!chatbot.classList.contains("active") && "Notification" in window) {
+    if (Notification.permission === "granted") {
+      new Notification("CESC Payment Confirmed", {
+        body: data.message || "Your payment has been received.",
+        icon: "/path/to/cesc-icon.png"
       });
     }
   }
@@ -341,6 +447,8 @@ function displayOutageNotification(data) {
 // ===================================
 
 async function sendMessage() {
+  resetSessionTimer();
+
   const message = userInput.value.trim();
   const hasText = message !== "";
   const hasFile = pendingFile !== null;
@@ -355,9 +463,9 @@ async function sendMessage() {
     addMessage(message, "user");
   }
 
-  userInput.value    = "";
+  userInput.value = "";
   userInput.disabled = true;
-  audioBtn.disabled  = true;
+  audioBtn.disabled = true;
   audioBtn.style.backgroundColor = "red";
 
   const fileToUpload = pendingFile;
@@ -413,7 +521,7 @@ async function sendMessage() {
       removeTypingIndicator();
       addMessage(`❌ File upload failed: ${uploadError.message}`, "bot");
       userInput.disabled = false;
-      audioBtn.disabled  = false;
+      audioBtn.disabled = false;
       audioBtn.style.backgroundColor = COLOR_PRIMARY;
       return;
     }
@@ -434,13 +542,13 @@ async function sendMessage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        "user_id":            session.gck,
-        "session_id":         session.session_id,
-        "text":               hasText ? message : `[File: ${uploadedFileName}]`,
+        "user_id": session.gck,
+        "session_id": session.session_id,
+        "text": hasText ? message : `[File: ${uploadedFileName}]`,
         "document_file_name": file_name,
-        "user_lat":           lat,
-        "user_long":          lng,
-        "channel":            "WEB"
+        "user_lat": lat,
+        "user_long": lng,
+        "channel": "WEB"
       })
     });
 
@@ -461,7 +569,7 @@ async function sendMessage() {
     }
 
     userInput.disabled = false;
-    audioBtn.disabled  = false;
+    audioBtn.disabled = false;
     audioBtn.style.backgroundColor = COLOR_PRIMARY;
 
   } catch (error) {
@@ -469,7 +577,7 @@ async function sendMessage() {
     removeTypingIndicator();
     addMessage("❌ Something went wrong. Please try again.", "bot");
     userInput.disabled = false;
-    audioBtn.disabled  = false;
+    audioBtn.disabled = false;
     audioBtn.style.backgroundColor = COLOR_PRIMARY;
   }
 }
@@ -511,19 +619,33 @@ function showFileChip(file) {
   attachName.textContent = file.name;
   attachType.textContent = ext;
 
-  if (file.type.startsWith("image/")) {
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+
+  if (isImage) {
     const reader = new FileReader();
     reader.onload = (e) => {
-      pendingFileDataUrl          = e.target.result;
-      attachThumb.src             = e.target.result;
-      attachThumb.style.display   = "block";
+      pendingFileDataUrl = e.target.result;
+      attachThumb.src = e.target.result;
+      attachThumb.style.display = "block";
       attachFileIcon.style.display = "none";
     };
     reader.readAsDataURL(file);
+  } else if (isVideo) {
+    // Use an object URL for the video chip thumbnail — revoked in clearFileChip()
+    if (pendingFileDataUrl && pendingFileDataUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(pendingFileDataUrl);
+    }
+    pendingFileDataUrl = URL.createObjectURL(file);
+    attachThumb.style.display = "none";
+    attachFileIcon.style.display = "flex";
+    // Swap file-alt icon to video icon
+    attachFileIcon.innerHTML = '<i class="fas fa-video"></i>';
   } else {
-    pendingFileDataUrl             = null;
-    attachThumb.style.display      = "none";
-    attachFileIcon.style.display   = "flex";
+    pendingFileDataUrl = null;
+    attachThumb.style.display = "none";
+    attachFileIcon.style.display = "flex";
+    attachFileIcon.innerHTML = '<i class="fas fa-file-alt"></i>';
   }
 
   attachmentPreviewSlot.style.display = "block";
@@ -535,16 +657,22 @@ function showFileChip(file) {
 }
 
 function clearFileChip() {
-  pendingFile        = null;
+  // Revoke any blob object URL allocated for video preview
+  if (pendingFileDataUrl && pendingFileDataUrl.startsWith("blob:")) {
+    URL.revokeObjectURL(pendingFileDataUrl);
+  }
+
+  pendingFile = null;
   pendingFileDataUrl = null;
 
   attachmentPreviewSlot.style.display = "none";
-  attachThumb.src              = "";
-  attachThumb.style.display    = "none";
+  attachThumb.src = "";
+  attachThumb.style.display = "none";
   attachFileIcon.style.display = "flex";
-  attachName.textContent       = "";
-  attachType.textContent       = "";
-  fileUpload.value             = "";
+  attachFileIcon.innerHTML = '<i class="fas fa-file-alt"></i>';
+  attachName.textContent = "";
+  attachType.textContent = "";
+  fileUpload.value = "";
 
   if (userInput.value.trim() !== "") {
     sendBtn.classList.add("active");
@@ -576,7 +704,7 @@ fileChipRemove.addEventListener("click", function (e) {
 
 audioBtn.addEventListener("click", function () {
   if (!isRecording) { startRecording(); }
-  else              { stopRecording(false); }
+  else { stopRecording(false); }
 });
 
 cancelRecording.addEventListener("click", function (e) {
@@ -591,8 +719,8 @@ function saveAudioBlob(blob) {
     event.target.result.createObjectStore("recordings");
   };
   request.onsuccess = function (event) {
-    const db    = event.target.result;
-    const tx    = db.transaction("recordings", "readwrite");
+    const db = event.target.result;
+    const tx = db.transaction("recordings", "readwrite");
     const store = tx.objectStore("recordings");
     store.put(blob, "latestRecording");
     tx.oncomplete = () => { console.log("Audio saved in IndexedDB"); };
@@ -603,14 +731,14 @@ function saveAudioBlob(blob) {
 function getAudioBlob() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open("AudioDB", 1);
-    request.onerror   = () => reject(request.error);
+    request.onerror = () => reject(request.error);
     request.onsuccess = function (event) {
-      const db         = event.target.result;
-      const tx         = db.transaction("recordings", "readonly");
-      const store      = tx.objectStore("recordings");
+      const db = event.target.result;
+      const tx = db.transaction("recordings", "readonly");
+      const store = tx.objectStore("recordings");
       const getRequest = store.get("latestRecording");
       getRequest.onsuccess = () => resolve(getRequest.result);
-      getRequest.onerror   = () => reject(getRequest.error);
+      getRequest.onerror = () => reject(getRequest.error);
     };
   });
 }
@@ -619,37 +747,37 @@ function getAudioBlob() {
 // ------- ANKIT ---------
 // Use this API to fetch the GROQ API KEY from Amazon Lambda (so that we do not expose api key in prod).
 async function getApiKey() {
-    try {
-        const response = await fetch("https://28iqvhtgm1.execute-api.ap-south-1.amazonaws.com/dev/apiKey", {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json"
-            }
-        });
+  try {
+    const response = await fetch("https://28iqvhtgm1.execute-api.ap-south-1.amazonaws.com/dev/apiKey", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data.api_key;
-
-    } catch (error) {
-        console.error("Error fetching GROQ API key:", error);
-        throw error;
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
     }
+
+    const data = await response.json();
+    return data.api_key;
+
+  } catch (error) {
+    console.error("Error fetching GROQ API key:", error);
+    throw error;
+  }
 }
 
 
 // ------- ANKIT ---------
 async function transcribeAudio(blob) {
   try {
-    const apiKey   =  await getApiKey();
+    const apiKey = await getApiKey();
     const audioFile = new File([blob], "audio.webm", { type: blob.type || "audio/webm" });
-    const formData  = new FormData();
-    formData.append("file",        audioFile);
-    formData.append("model",       "whisper-large-v3-turbo");
-    formData.append("language",    "en");
+    const formData = new FormData();
+    formData.append("file", audioFile);
+    formData.append("model", "whisper-large-v3-turbo");
+    formData.append("language", "en");
     formData.append("temperature", "0.0");
 
     const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
@@ -670,7 +798,7 @@ async function startRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     mediaRecorder = new MediaRecorder(stream);
-    audioChunks   = [];
+    audioChunks = [];
 
     mediaRecorder.addEventListener("dataavailable", event => { audioChunks.push(event.data); });
     mediaRecorder.addEventListener("stop", () => {
@@ -688,7 +816,7 @@ async function startRecording() {
     recordingUI.classList.add("active");
 
     recordingStartTime = Date.now();
-    recordingInterval  = setInterval(updateRecordingTimer, 100);
+    recordingInterval = setInterval(updateRecordingTimer, 100);
 
   } catch (error) {
     console.error("Microphone access denied:", error);
@@ -714,10 +842,11 @@ async function stopRecording(cancelled = false) {
   recordingTimer.textContent = "0:00";
 
   userInput.disabled = true;
-  audioBtn.disabled  = true;
+  audioBtn.disabled = true;
   audioBtn.style.backgroundColor = "red";
 
   if (!cancelled) {
+    resetSessionTimer();
     await requestLocationIfNeeded();
 
     const waitForBlob = () => new Promise((resolve) => {
@@ -728,11 +857,11 @@ async function stopRecording(cancelled = false) {
       check();
     });
 
-    const session    = await getOrCreateSessionId();
+    const session = await getOrCreateSessionId();
     showTypingIndicator();
 
-    const audioBlob      = await waitForBlob();
-    let transcribedMsg   = await transcribeAudio(audioBlob);
+    const audioBlob = await waitForBlob();
+    let transcribedMsg = await transcribeAudio(audioBlob);
     console.log("Transcribed Msg:", transcribedMsg);
 
     addMessage(transcribedMsg, "user");
@@ -744,13 +873,13 @@ async function stopRecording(cancelled = false) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          "user_id":            session.gck,
-          "session_id":         session.session_id,
-          "text":               transcribedMsg,
+          "user_id": session.gck,
+          "session_id": session.session_id,
+          "text": transcribedMsg,
           "document_file_name": "",
-          "user_lat":           lat,
-          "user_long":          lng,
-          "channel":            "WEB"
+          "user_lat": lat,
+          "user_long": lng,
+          "channel": "WEB"
         })
       });
 
@@ -761,7 +890,7 @@ async function stopRecording(cancelled = false) {
       addMessage(data['reply'], "bot");
 
       userInput.disabled = false;
-      audioBtn.disabled  = false;
+      audioBtn.disabled = false;
       audioBtn.style.backgroundColor = COLOR_PRIMARY;
 
     } catch (error) {
@@ -769,20 +898,20 @@ async function stopRecording(cancelled = false) {
       removeTypingIndicator();
       addMessage("❌ Something went wrong. Please try again.", "bot");
       userInput.disabled = false;
-      audioBtn.disabled  = false;
+      audioBtn.disabled = false;
       audioBtn.style.backgroundColor = COLOR_PRIMARY;
     }
   } else {
     userInput.disabled = false;
-    audioBtn.disabled  = false;
+    audioBtn.disabled = false;
     audioBtn.style.backgroundColor = COLOR_PRIMARY;
   }
 }
 
 function updateRecordingTimer() {
-  const elapsed          = Date.now() - recordingStartTime;
-  const seconds          = Math.floor(elapsed / 1000);
-  const minutes          = Math.floor(seconds / 60);
+  const elapsed = Date.now() - recordingStartTime;
+  const seconds = Math.floor(elapsed / 1000);
+  const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   recordingTimer.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   if (seconds >= 120) stopRecording(false);
