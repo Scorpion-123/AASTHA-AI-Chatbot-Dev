@@ -274,7 +274,7 @@ function removeTypingIndicator() {
 function getOrCreateSessionId() {
   let session = JSON.parse(localStorage.getItem("session"));
   if (!session) {
-    session = { "gck": "test_user", "session_id": crypto.randomUUID() };
+    session = { "gck": "test_user_dev", "session_id": crypto.randomUUID() };
     localStorage.setItem("session", JSON.stringify(session));
   }
   return session;
@@ -299,7 +299,7 @@ function resetSessionTimer() {
 
   sessionTimeoutHandle = setTimeout(() => {
     // Rotate only session_id, keep gck (user identity) intact
-    const session = JSON.parse(localStorage.getItem("session")) || { gck: "test_user" };
+    const session = JSON.parse(localStorage.getItem("session")) || { gck: "test_user_dev" };
     const oldId = session.session_id;
     session.session_id = crypto.randomUUID();
     localStorage.setItem("session", JSON.stringify(session));
@@ -345,12 +345,8 @@ function initializeSSE() {
         const data = JSON.parse(event.data);
         console.log("SSE RECEIVED:", data);
 
-        // Route to the correct notification style based on type
-        if (data.type === "payment") {
-          displayPaymentNotification(data);
-        } else {
-          displayOutageNotification(data);
-        }
+        // Route to the dynamic notification builder
+        displayDynamicNotification(data);
 
       } catch (error) {
         console.error("Error parsing SSE data:", error);
@@ -372,18 +368,41 @@ function initializeSSE() {
   }
 }
 
-function displayOutageNotification(data) {
+const NOTIFICATION_CONFIG = {
+  // Canonical event_type values (set by producer Lambda)
+  OUTAGE_STARTED:   { label: "Power Outage Alert",  icon: "⚠️" },
+  OUTAGE_RESOLVED:  { label: "Power Restored",       icon: "✅" },
+  DOCKET_RESOLVED:  { label: "Docket Resolved",      icon: "✅" },
+  PAYMENT_SUCCESS:  { label: "Payment Confirmed",    icon: "✅" },
+  PAYMENT_FAILED:   { label: "Payment Failed",       icon: "❌" },
+  LOW_BALANCE:      { label: "Low Balance Alert",    icon: "⚠️" },
+
+  // Raw power_status aliases — guards against stale DynamoDB entries
+  // stored before event_type normalisation was in place
+  OUTAGE:           { label: "Power Outage Alert",  icon: "⚠️" },
+  RESTORED:         { label: "Power Restored",       icon: "✅" },
+};
+
+function displayDynamicNotification(data) {
+  // Try to find a config match, otherwise auto-format the type string
+  const typeKey = (data.type || "").toUpperCase();
+  const config = NOTIFICATION_CONFIG[typeKey] || {
+    label: (data.type || "Notification").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+    icon: "🔔"
+  };
+
   const messageDiv = document.createElement("div");
-  messageDiv.classList.add("message", "bot", "outage-notification");
+  messageDiv.classList.add("message", "bot", "dynamic-notification");
 
   const messageContent = document.createElement("div");
   messageContent.classList.add("message-content");
 
-  let notificationText = "⚠️ **Outage Alert**\n\n";
+  let notificationText = `${config.icon} **${config.label}**\n\n`;
 
   if (data.message) {
     notificationText += data.message;
   } else {
+    // Fallback for older outage objects that came as structured fields
     if (data.area) notificationText += `**Area:** ${data.area}\n`;
     if (data.status) notificationText += `**Status:** ${data.status}\n`;
     if (data.estimated_restoration) notificationText += `**Estimated Restoration:** ${data.estimated_restoration}\n`;
@@ -400,47 +419,57 @@ function displayOutageNotification(data) {
   messageContent.innerHTML = formattedText;
   messageDiv.appendChild(messageContent);
   chatBody.appendChild(messageDiv);
+
+  // Handle WhatsApp Opt-In trigger
+  if (typeKey === "DOCKET_RESOLVED" && sessionStorage.getItem("optInStatus") !== "true" && sessionStorage.getItem("optInStatus") !== "false") {
+    const optInCard = document.createElement("div");
+    optInCard.classList.add("message", "bot", "optin-card");
+    optInCard.innerHTML = `
+      <div class="message-content" style="background: #e8f5e9; border: 1px solid #4caf50; padding: 12px; border-radius: 8px;">
+        <strong style="color: #2e7d32; display: flex; align-items: center; gap: 6px;">
+          <i class="fab fa-whatsapp" style="font-size: 1.2em;"></i> WhatsApp Updates
+        </strong>
+        <div style="margin-top: 8px; margin-bottom: 12px; color: #333; font-size: 0.95em;">
+          Would you like to receive future updates and alerts directly on WhatsApp?
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button onclick="handleWhatsAppOptIn('Yes', this)" style="padding: 6px 16px; border-radius: 20px; border: none; background: #4caf50; color: white; cursor: pointer; font-weight: 500; transition: background 0.2s;">Yes, please</button>
+          <button onclick="handleWhatsAppOptIn('No', this)" style="padding: 6px 16px; border-radius: 20px; border: 1px solid #4caf50; background: white; color: #4caf50; cursor: pointer; font-weight: 500; transition: background 0.2s;">No thanks</button>
+        </div>
+      </div>
+    `;
+    chatBody.appendChild(optInCard);
+  }
+
   chatBody.scrollTop = chatBody.scrollHeight;
 
+  // OS-level notification
   if (!chatbot.classList.contains("active") && "Notification" in window) {
     if (Notification.permission === "granted") {
-      new Notification("CESC Outage Alert", {
-        body: data.message || "New outage notification received",
+      new Notification(`CESC ${config.label}`, {
+        body: data.message || "New notification received",
         icon: "/path/to/cesc-icon.png"
       });
     }
   }
 }
 
-function displayPaymentNotification(data) {
-  const messageDiv = document.createElement("div");
-  messageDiv.classList.add("message", "bot", "payment-notification");
+// ===================================
+// WHATSAPP OPT-IN HANDLER
+// ===================================
 
-  const messageContent = document.createElement("div");
-  messageContent.classList.add("message-content");
-
-  const notificationText = "✅ **Payment Confirmed**\n\n" + (data.message || "Your payment has been received.");
-
-  let formattedText = notificationText
-    .replace(/\\n/g, '\n')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/\n/g, '<br>');
-
-  messageContent.innerHTML = formattedText;
-  messageDiv.appendChild(messageContent);
-  chatBody.appendChild(messageDiv);
-  chatBody.scrollTop = chatBody.scrollHeight;
-
-  if (!chatbot.classList.contains("active") && "Notification" in window) {
-    if (Notification.permission === "granted") {
-      new Notification("CESC Payment Confirmed", {
-        body: data.message || "Your payment has been received.",
-        icon: "/path/to/cesc-icon.png"
-      });
-    }
+window.handleWhatsAppOptIn = function(choice, btnElement) {
+  const btnContainer = btnElement.parentElement;
+  btnContainer.innerHTML = `<em>You selected: <strong>${choice}</strong></em>`;
+  
+  if (choice === 'Yes') {
+    window.pendingOptIn = true;
+    userInput.value = "Yes";
+    sendMessage();
+  } else {
+    sessionStorage.setItem("optInStatus", "false");
   }
-}
+};
 
 // ===================================
 // SEND MESSAGE
@@ -548,11 +577,27 @@ async function sendMessage() {
         "document_file_name": file_name,
         "user_lat": lat,
         "user_long": lng,
-        "channel": "WEB"
+        "channel": "WEB",
+        "opt_in": sessionStorage.getItem("optInStatus") || "",
+        "new_opt_in": window.pendingOptIn ? "true" : "false"
       })
     });
 
     if (!response.ok) {
+      // Try to read a user-friendly message from the server's error body
+      let serverReply = null;
+      try {
+        const errBody = await response.json();
+        serverReply = errBody.reply || null;
+      } catch (_) {}
+      if (serverReply) {
+        removeTypingIndicator();
+        addMessage(serverReply, "bot");
+        userInput.disabled = false;
+        audioBtn.disabled = false;
+        audioBtn.style.backgroundColor = COLOR_PRIMARY;
+        return;
+      }
       throw new Error(`API error: ${response.status} ${response.statusText}`);
     }
 
@@ -561,8 +606,16 @@ async function sendMessage() {
 
     removeTypingIndicator();
 
+    if (data && data.opted_in !== undefined && data.opted_in !== null) {
+      sessionStorage.setItem("optInStatus", data.opted_in ? "true" : "false");
+    }
+    window.pendingOptIn = false;
+
     if (data && data['reply']) {
       addMessage(data['reply'], "bot");
+    } else if (data && data['status'] === 'error') {
+      // Backend returned structured error — show user-friendly message
+      addMessage(data['reply'] || "❌ Something went wrong. Please try again.", "bot");
     } else {
       console.error("No reply in response:", data);
       addMessage("❌ No response received from server. Please try again.", "bot");
@@ -575,7 +628,13 @@ async function sendMessage() {
   } catch (error) {
     console.error("Error:", error);
     removeTypingIndicator();
-    addMessage("❌ Something went wrong. Please try again.", "bot");
+    // Try to show the server's user-friendly message if available
+    let errMsg = "❌ Something went wrong. Please try again.";
+    try {
+      const errData = error._responseData;
+      if (errData && errData.reply) errMsg = errData.reply;
+    } catch (_) {}
+    addMessage(errMsg, "bot");
     userInput.disabled = false;
     audioBtn.disabled = false;
     audioBtn.style.backgroundColor = COLOR_PRIMARY;
@@ -887,7 +946,12 @@ async function stopRecording(cancelled = false) {
       console.log(data);
 
       removeTypingIndicator();
-      addMessage(data['reply'], "bot");
+      if (data && data['reply']) {
+        addMessage(data['reply'], "bot");
+      } else {
+        console.error("No reply in audio response:", data);
+        addMessage("❌ No response received. Please try again.", "bot");
+      }
 
       userInput.disabled = false;
       audioBtn.disabled = false;
